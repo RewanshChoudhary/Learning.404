@@ -86,8 +86,8 @@ def pprint_response(response):
 def exhchange_rates(base_currency : str,target_currency:str,date : str="latest"):
     url=f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{date}/v1/currencies/{base_currency.lower()}.json"
     response=httpx.get(url)
-    if response==200:
-       print(response.json())
+    if response.status_code==200:
+       return response.json()
     else:
         raise Exception(f"The link gave an error response {response.status_code}")
     
@@ -101,16 +101,16 @@ def function_calling(llm_response : str):
         }
         messages.append(llm_response)
         for tool_call in tool_calls:
-            function_name=tool_call.function_name
+            function_name=tool_call.function.name
             function_to_call=functions[function_name]
             function_args=json.loads(tool_call.function.arguments)
             
-            func_info=inspect.get(function_to_call)
+            sig = inspect.signature(function_to_call)
             
             caller_args={
-                k:function_args.get(k,v.defaults)
-                for k,v in func_info.items()
-                if k in function_args or v.default is not inspect.Paramter.empty
+                k:function_args.get(k, v.default)
+                for k, v in sig.parameters.items()
+                if k in function_args or v.default is not inspect.Parameter.empty
             }
             
             print(f"\n Calling the function {function_to_call} with args {function_args}")
@@ -123,8 +123,8 @@ def function_calling(llm_response : str):
             tool_stats={
                 "tool_call_id":tool_call.id,
                 "role":"tool",
-                "name":function_to_call,
-                "response":function_response,
+                "name":function_name,
+                "content":function_response,
             }
             messages.append(tool_stats)
         second_response=client.chat.completions.create(
@@ -138,4 +138,4 @@ def function_calling(llm_response : str):
         print("\n---Formatted LLM Response---")
         print("\n",second_response.choices[0].message.content)
     
-function_calling((response))
+function_calling(response)
